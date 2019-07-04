@@ -1,158 +1,166 @@
-import React, { Component } from "react";
-import "./App.css";
-import {FormGroup,Label,Input, Modal,ModalBody,ModalHeader,ModalFooter, Table, Button } from "reactstrap";
+import React from "react";
 import axios from 'axios'
 
-class App extends Component {
+import { Table, Button, Spinner } from "reactstrap";
+
+import MemberModal from './MemberModal';
+
+import "./App.css";
+
+export default class App extends React.Component {
   state = {
     people: [],
-    newMemberData : {
-      name: '',
-      age: ''
+    isLoading: true,
+    memberData: {
+      id: null,
+      name: null,
+      age: null
     },
-    editMemberData : {
-      id:'',
-      name: '',
-      age: ''
-    },
-
-    NewMemberModal : false,
-    editMemberModal: false
+    isEditMember: false,
+    isMemberModalOpen: false,
+    isAddOrEditMemberUpdating: false
   };
+
   componentWillMount() {
-    axios.get("http://api1.zapote.se/people")
-      .then(response =>
-        {this.setState (
-          {
-            people:response.data
-          }
-        )})
-  }
-  toggleNewMemberModal(){
-    this.setState({
-      NewMemberModal :! this.state.NewMemberModal
-    })
-  }
-  toggleEditMemberModal(){
-    this.setState({
-      editMemberModal :! this.state.editMemberModal
-    })
+    this.fetchMembers();
   }
 
-  addMember(){
-    axios.post("http://api1.zapote.se/people",this.state.newMemberData).then((response) =>{
-    let {people} = this.state;
-    people.push(response.data);
-    this.setState({people,NewMemberModal : false,newMemberData : {
-      name: '',
-      age: ''
-    }})
-  })
+  toggleMemberModal = isEditMember => {
+    this.setState({
+      isEditMember,
+      isMemberModalOpen : !this.state.isMemberModalOpen,
+      memberData: !this.state.isMemberModalOpen ? { } : this.state.memberData,
+    });
   }
-  updateMember(){
-    let {name,age} = this.state.editMemberData
-    axios.put("http://api1.zapote.se/people/" + this.state.editMemberData.id, {
-      name,age
-    }).then((response) => {
-      this._refreshMembers()
+
+  addMember = () => {
+    this.setState({
+      isAddOrEditMemberUpdating: true,
+    });
+
+    const { name, age } = this.state.memberData;
+
+    axios.post("http://api1.zapote.se/people", { name, age: Number(age) }).then(response =>{
+      let { people } = this.state;
+      people.push(response.data);
+      
+      this.setState({ 
+        people, 
+        memberData: {},
+        isMemberModalOpen: false,
+        isAddOrEditMemberUpdating: false
+      });
+    })
+  }
+  
+  updateMember = () => {
+    let { name, age, id } = this.state.memberData;
+
+    this.setState({
+      isAddOrEditMemberUpdating: true
+    });
+
+    axios.put(`http://api1.zapote.se/people/${id}`, {
+      name, age: Number(age)
+    }).then(response => {
+      
       this.setState({
-        editMemberModal :false, editMemberData :{id:'',name:'',age:''}
-      })
-    })
+        memberData: {},
+        people: this.state.people.map(person =>  {
+          if (person.id === response.data.id) return response.data;
 
+          return person
+        }),
+        isMemberModalOpen: false,
+        isAddOrEditMemberUpdating: false
+      })
+    });
   }
-  editMember(id,name,age){
+  
+  editMember = personData => () => {
     this.setState({
-      editMemberData :{id,name,age},editMemberModal :! this.state.editMemberModal
-    })
+      memberData: personData,
+      isMemberModalOpen: true,
+      isEditMember: true
+    });
   }
-  deleteMember(id){
-  axios.delete("http://api1.zapote.se/people/" + id).then((response) => {
-    this._refreshMembers()
+  
+  deleteMember = id => () => {
+    this.setState({
+      currentlyDeletingId: id
+    });
+
+    axios.delete("http://api1.zapote.se/people/" + id).then(response => {
+      this.setState({
+        people: this.state.people.filter(person => person.id !== id),
+        currentlyDeletingId: null
+      });
+    });
   }
-  )
+
+  fetchMembers = () => {
+    this.setState({
+      isLoading: true
+    });
+
+    axios.get("http://api1.zapote.se/people").then(response => {
+      this.setState ({
+        people:response.data,
+        isLoading: false
+      });
+    });
   }
-  _refreshMembers(){
-    axios.get("http://api1.zapote.se/people")
-      .then(response =>
-        {this.setState (
-          {
-            people:response.data
-          }
-        )}
-        )}
+
+  handleInput = type => e => {
+    let { memberData } = this.state;
+
+    memberData[type] = e.target.value;
+    
+    this.setState({ memberData })
+  }
+
+  handelMemberData = memberData => () => {
+    if (this.state.isEditMember) {
+      return this.updateMember();
+    }
+
+    return this.addMember();
+  }
+
   render() {
-    let member = this.state.people.map(person => {
-     return(
-      <tr key={person.id}>
-              <td>{person.id}</td>
-              <td>{person.name}</td>
-              <td>{person.age}</td>
-              <td>
-                <Button color='success' size='sm' className='mr-2'onClick ={this.editMember.bind(this,person.id,person.name,person.age)}>Edit</Button>
-                <Button color='danger' size='sm' onClick={this.deleteMember.bind(this,person.id)}>Delete</Button>
-              </td>
-            </tr>
-     )
-    })
+    const {
+      isLoading,
+      memberData,
+      isEditMember,
+      isMemberModalOpen,
+      currentlyDeletingId,
+      isAddOrEditMemberUpdating
+    } = this.state;
+
+    const membersList = !isLoading && this.state.people.map(person => {
+      return(
+        <Member
+          key={person.id} // Here id is unique
+          person={person}
+          editMember={this.editMember}
+          deleteMember={this.deleteMember}
+          currentlyDeletingId={currentlyDeletingId}
+        />
+      );
+    });
+
     return (
       <div className="App container">
         <h1>CRUD Operations App</h1>
-        <Button className ='my-4' color="primary" onClick={this.toggleNewMemberModal.bind(this)}> Add New Member</Button>
-        <Modal isOpen={this.state.NewMemberModal} toggle={this.toggleNewMemberModal.bind(this)}>
-          <ModalHeader toggle={this.toggleNewMemberModal.bind(this)}>Add Member</ModalHeader>
-          <ModalBody>
-          <FormGroup>
-          <Label for="name" >Name</Label>
-          <Input id="name" value ={this.state.newMemberData.name} onChange= {(e)=>{
-           let {newMemberData} = this.state;
-           newMemberData.name = e.target.value;
-           this.setState({newMemberData})
-          }} />
-        </FormGroup>
-        <FormGroup>
-          <Label for="age" >Age</Label>
-          <Input id="age" value ={this.state.newMemberData.age} onChange= {(e)=>{
-           let {newMemberData} = this.state;
-           newMemberData.age = Number(e.target.value);
-           this.setState({newMemberData})
-          }}  
-          />
-        </FormGroup>
-          </ModalBody>
-          <ModalFooter>
-            <Button color="primary" onClick={this.addMember.bind(this)}>Add member</Button>{' '}
-            <Button color="secondary" onClick={this.toggleNewMemberModal.bind(this)}>Cancel</Button>
-          </ModalFooter>
-
-        </Modal>
-        <Modal isOpen={this.state.editMemberModal} toggle={this.toggleEditMemberModal.bind(this)}>
-          <ModalHeader toggle={this.toggleEditMemberModal.bind(this)}>Edit Member</ModalHeader>
-          <ModalBody>
-          <FormGroup>
-          <Label for="name" >Name</Label>
-          <Input id="name" value ={this.state.editMemberData.name} onChange= {(e)=>{
-           let {editMemberData} = this.state;
-           editMemberData.name = e.target.value;
-           this.setState({editMemberData})
-          }} />
-        </FormGroup>
-        <FormGroup>
-          <Label for="age" >Age</Label>
-          <Input id="age" value ={this.state.editMemberData.age} onChange= {(e)=>{
-           let {editMemberData} = this.state;
-           editMemberData.age = Number(e.target.value);
-           this.setState({editMemberData})
-          }}  
-          />
-        </FormGroup>
-          </ModalBody>
-          <ModalFooter>
-            <Button color="primary" onClick={this.updateMember.bind(this)}>Update member</Button>{' '}
-            <Button color="secondary" onClick={this.toggleEditMemberModal.bind(this)}>Cancel</Button>
-          </ModalFooter>
-        </Modal>
-
+        <Button 
+          className ='my-4' 
+          color="primary" 
+          onClick={() => this.toggleMemberModal(false)}
+        >
+          Add New Member
+        </Button>
+       
+       {isLoading ? (<h1> Loading...</h1>) : (
         <Table>
           <thead>
             <tr>
@@ -163,12 +171,49 @@ class App extends Component {
             </tr>
           </thead>
           <tbody>
-          {member}
+          {membersList}
           </tbody>
         </Table>
+       )}
+        
+
+        <MemberModal 
+          isEdit={isEditMember}
+          memberData={memberData}
+          handleInput={this.handleInput}
+          isLoading={isAddOrEditMemberUpdating}
+          isMemberModalOpen={isMemberModalOpen}
+          handelMemberData={this.handelMemberData}
+          toggleMemberModal={this.toggleMemberModal}
+        />
       </div>
     );
   }
 }
 
-export default App;
+const Member = ({ person, editMember, deleteMember, currentlyDeletingId }) => (
+  <tr key={person.id}>
+    <td>{person.id}</td>
+    <td>{person.name}</td>
+    <td>{person.age}</td>
+    <td>
+      <Button 
+        size='sm' 
+        color='success' 
+        className='mr-2'
+        onClick={editMember(person)}
+        disabled={currentlyDeletingId === person.id}
+      >
+        Edit
+      </Button>
+      <Button 
+        size='sm'
+        color='danger' 
+        onClick={deleteMember(person.id)}
+        disabled={currentlyDeletingId === person.id}
+      >
+        {currentlyDeletingId === person.id ? <Spinner size="sm" color="light" /> : 'Delete'}
+      </Button>
+    </td>
+  </tr>
+);
