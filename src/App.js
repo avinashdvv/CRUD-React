@@ -51,10 +51,13 @@ class App extends Component {
   }
   updateMember(){
     let {name,age} = this.state.editMemberData
-    axios.put("http://api1.zapote.se/people" + this.state.editMemberData.id, {
+    axios.put("http://api1.zapote.se/people/" + this.state.editMemberData.id, {
       name,age
     }).then((response) => {
-      console.log(response.data)
+      this._refreshMembers()
+      this.setState({
+        editMemberModal :false, editMemberData :{id:'',name:'',age:''}
+      })
     })
 
   }
@@ -63,6 +66,21 @@ class App extends Component {
       editMemberData :{id,name,age},editMemberModal :! this.state.editMemberModal
     })
   }
+  deleteMember(id){
+  axios.delete("http://api1.zapote.se/people/" + id).then((response) => {
+    this._refreshMembers()
+  }
+  )
+  }
+  _refreshMembers(){
+    axios.get("http://api1.zapote.se/people")
+      .then(response =>
+        {this.setState (
+          {
+            people:response.data
+          }
+        )}
+        )}
   render() {
     let member = this.state.people.map(person => {
      return(
@@ -72,7 +90,7 @@ class App extends Component {
               <td>{person.age}</td>
               <td>
                 <Button color='success' size='sm' className='mr-2'onClick ={this.editMember.bind(this,person.id,person.name,person.age)}>Edit</Button>
-                <Button color='danger' size='sm' >Delete</Button>
+                <Button color='danger' size='sm' onClick={this.deleteMember.bind(this,person.id)}>Delete</Button>
               </td>
             </tr>
      )
